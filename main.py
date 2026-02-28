@@ -3,13 +3,19 @@ import numpy as np
 import os
 import json
 
+# ==============================
+# CONFIG
+# ==============================
+
 INPUT_FOLDER = "cctv"
 
-MIN_CONTOUR_AREA = 1000
-NO_MOTION_BUFFER_SECONDS = 1
-IGNORE_INITIAL_SECONDS = 2
+MIN_CONTOUR_AREA = 1000        # ignore tiny movement
+NO_MOTION_BUFFER_SEC = 1       # motion must stop for 1 sec
+IGNORE_INITIAL_SEC = 2         # let background model learn
 
-
+# ==============================
+# PROCESS VIDEO FUNCTION
+# ==============================
 
 def process_video(video_path):
 
@@ -17,11 +23,18 @@ def process_video(video_path):
 
     cap = cv2.VideoCapture(video_path)
 
+    # ----- SAFETY CHECK 1 -----
     if not cap.isOpened():
-        print("Error opening video.")
+        print("❌ Cannot open video (corrupted). Skipping.")
         return
 
     fps = cap.get(cv2.CAP_PROP_FPS)
+
+    # ----- SAFETY CHECK 2 -----
+    if fps == 0:
+        print("❌ Invalid FPS. Skipping.")
+        return
+
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
@@ -30,44 +43,63 @@ def process_video(video_path):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
-    backSub = cv2.createBackgroundSubtractorMOG2(
+    # Background subtractor (MODEL)
+    bg = cv2.createBackgroundSubtractorMOG2(
         history=500,
         varThreshold=50,
         detectShadows=True
     )
 
     frame_count = 0
-    motion_detected = False
+    motion_active = False
     motion_start = None
     no_motion_frames = 0
     events = []
+    frame_buffer = []
 
-    NO_MOTION_THRESHOLD = int(fps * NO_MOTION_BUFFER_SECONDS)
-    IGNORE_INITIAL_FRAMES = int(fps * IGNORE_INITIAL_SECONDS)
+    NO_MOTION_LIMIT = int(fps * NO_MOTION_BUFFER_SEC)
+    IGNORE_FRAMES = int(fps * IGNORE_INITIAL_SEC)
 
-    frames_buffer = []
+    # ==========================
+    # FRAME LOOP
+    # ==========================
 
     while True:
         ret, frame = cap.read()
+
         if not ret:
             break
 
         frame_count += 1
 
-        if frame_count < IGNORE_INITIAL_FRAMES:
-            backSub.apply(frame)
+        # let background model stabilize
+        if frame_count < IGNORE_FRAMES:
+            bg.apply(frame)
             continue
 
+        # grayscale
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        # reduce vibration noise
         gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
-        fg_mask = backSub.apply(gray)
+        # apply background subtraction
+        fg_mask = bg.apply(gray)
 
+        # binary cleanup
         _, mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
 
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3,3),np.uint8))
+        mask = cv2.morphologyEx(
+            mask,
+            cv2.MORPH_OPEN,
+            np.ones((3, 3), np.uint8)
+        )
 
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(
+            mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )
 
         motion = False
 
@@ -76,19 +108,26 @@ def process_video(video_path):
                 motion = True
                 break
 
+        # ======================
+        # MOTION LOGIC
+        # ======================
+
         if motion:
-            if not motion_detected:
+
+            if not motion_active:
                 motion_start = frame_count / fps
-                motion_detected = True
+                motion_active = True
 
             no_motion_frames = 0
-            frames_buffer.append(frame)
+            frame_buffer.append(frame)
 
         else:
-            if motion_detected:
+
+            if motion_active:
                 no_motion_frames += 1
 
-                if no_motion_frames > NO_MOTION_THRESHOLD:
+                if no_motion_frames > NO_MOTION_LIMIT:
+
                     motion_end = (frame_count - no_motion_frames) / fps
                     duration = motion_end - motion_start
 
@@ -99,28 +138,72 @@ def process_video(video_path):
                             "duration_seconds": round(duration, 3)
                         })
 
-                        for f in frames_buffer:
+                        # write saved motion frames
+                        for f in frame_buffer:
                             out.write(f)
 
-                    frames_buffer = []
-                    motion_detected = False
+                    frame_buffer = []
+                    motion_active = False
                     no_motion_frames = 0
+
+    # ==========================
+    # CLEANUP
+    # ==========================
 
     cap.release()
     out.release()
+    import os
+    # ==========================
+    # REPLACE ORIGINAL VIDEO
+    # ==========================
 
-    log_path = video_path.replace(".mp4", "_log.json")
-    with open(log_path, "w") as f:
-        json.dump(events, f, indent=4)
+    processed_path = output_path   # already created earlier
 
-    print(f"Finished: {video_path}")
-    print(f"Events detected: {len(events)}")
+    # check processed file exists
+    if os.path.exists(processed_path):
 
+        # remove original video
+        #os.remove(video_path)
+
+        # rename processed -> original name
+        #os.rename(processed_path, video_path)
+        #instead of remove and and rename we use replace to do it in a single step
+        os.replace(processed_path, video_path)
+
+        print("✔ Original replaced with compressed video")
+    else:
+        print("❌ Processed video not found, skipping replacement")
+
+        # save log
+        log_path = video_path.replace(".mp4", "_log.json")
+        with open(log_path, "w") as f:
+            json.dump(events, f, indent=4)
+
+        print(f"Finished: {video_path}")
+        print(f"Events detected: {len(events)}")
+
+
+
+
+# ==============================
+# MAIN
+# ==============================
 
 def main():
-    for file in os.listdir(INPUT_FOLDER):
-        if file.endswith(".mp4"):
-            process_video(os.path.join(INPUT_FOLDER, file))
+
+    if not os.path.exists(INPUT_FOLDER):
+        print("❌ CCTV folder not found")
+        return
+
+    files = [f for f in os.listdir(INPUT_FOLDER) if f.endswith(".mp4")]
+
+    if len(files) == 0:
+        print("No videos found.")
+        return
+
+    for file in files:
+        path = os.path.join(INPUT_FOLDER, file)
+        process_video(path)
 
 
 if __name__ == "__main__":
