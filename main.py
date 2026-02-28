@@ -10,7 +10,6 @@ NO_MOTION_BUFFER_SECONDS = 1
 IGNORE_INITIAL_SECONDS = 2
 
 
-
 def process_video(video_path):
 
     print(f"\nProcessing: {video_path}")
@@ -115,6 +114,18 @@ def process_video(video_path):
 
     print(f"Finished: {video_path}")
     print(f"Events detected: {len(events)}")
+
+    # -----------------------------
+    # SAFE DELETE ORIGINAL VIDEO
+    # -----------------------------
+    if os.path.exists(output_path) and os.path.exists(log_path):
+        try:
+            os.remove(video_path)
+            print("Original video deleted successfully.")
+        except Exception as e:
+            print("Error deleting original video:", e)
+    else:
+        print("Processed files missing. Original NOT deleted.")
 
 
 def main():
