@@ -8,7 +8,6 @@ import json
 # ==============================
 
 INPUT_FOLDER = "cctv"
-
 MIN_CONTOUR_AREA = 1000
 NO_MOTION_BUFFER_SEC = 1.5
 IGNORE_INITIAL_SEC = 2
@@ -16,18 +15,10 @@ IGNORE_INITIAL_SEC = 2
 LONG_DIFF_GAP = 3
 THRESHOLD_VALUE = 140
 
-
-# ==============================
-# PROCESS VIDEO
-# ==============================
-
 def process_video(video_path):
-
     print(f"\nProcessing: {video_path}")
 
     cap = cv2.VideoCapture(video_path)
-
-    # SAFETY CHECKS
     if not cap.isOpened():
         print("❌ Cannot open video. Skipping.")
         return
@@ -88,40 +79,9 @@ def process_video(video_path):
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
-        fg_mask = bg.apply(gray)
-
-        _, mask = cv2.threshold(
-            fg_mask,
-            THRESHOLD_VALUE,
-            255,
-            cv2.THRESH_BINARY
-        )
-
-        mask = cv2.morphologyEx(
-            mask,
-            cv2.MORPH_OPEN,
-            np.ones((3, 3), np.uint8)
-        )
-
-        # LONG FRAME DIFFERENCE (N-3)
-        frame_history.append(gray)
-
-        if len(frame_history) > LONG_DIFF_GAP:
-            long_diff = cv2.absdiff(
-                frame_history[-1],
-                frame_history[-LONG_DIFF_GAP]
-            )
-
-            _, long_mask = cv2.threshold(
-                long_diff,
-                20,
-                255,
-                cv2.THRESH_BINARY
-            )
-        else:
-            long_mask = np.zeros_like(gray)
-
-        combined_mask = cv2.bitwise_or(mask, long_mask)
+        fg_mask = backSub.apply(gray)
+        _, mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3,3),np.uint8))
 
         contours, _ = cv2.findContours(
             combined_mask,
@@ -130,7 +90,6 @@ def process_video(video_path):
         )
 
         motion = False
-
         for c in contours:
             if cv2.contourArea(c) > MIN_CONTOUR_AREA:
                 motion = True
@@ -180,24 +139,40 @@ def process_video(video_path):
     cap.release()
     out.release()
 
-    # ==========================
-    # VIDEO STATS
-    # ==========================
+    # -----------------------------
+    # MOVE PROCESSED FILE TO NEW FOLDER
+    # -----------------------------
+    processed_folder = "processed"
+    os.makedirs(processed_folder, exist_ok=True)
 
-    # total original video duration
-    original_duration = frame_count / fps
+    new_output_path = os.path.join(
+        processed_folder,
+        os.path.basename(output_path)
+    )
 
-    # total compressed duration (sum of motion events)
-    compressed_duration = 0
-    for e in events:
-        compressed_duration += e["duration_seconds"]
+    if os.path.exists(output_path):
+        os.replace(output_path, new_output_path)
+        print(f"Processed video moved to → {new_output_path}")
+    else:
+        print("Processed file not found. Move failed.")
 
-    # compression percentage
-    if original_duration > 0:
-        compression_percentage = (
-            (original_duration - compressed_duration)
-            / original_duration
-        ) * 100
+    # Save log
+    log_path = video_path.replace(".mp4", "_log.json")
+    with open(log_path, "w") as f:
+        json.dump(events, f, indent=4)
+
+    print(f"Finished: {video_path}")
+    print(f"Events detected: {len(events)}")
+
+    # -----------------------------
+    # SAFE DELETE ORIGINAL VIDEO
+    # -----------------------------
+    if os.path.exists(new_output_path) and os.path.exists(log_path):
+        try:
+            os.remove(video_path)
+            print("Original video deleted successfully.")
+        except Exception as e:
+            print("Error deleting original video:", e)
     else:
         compression_percentage = 0
 
@@ -219,15 +194,6 @@ def process_video(video_path):
     with open(log_path, "w") as f:
         json.dump(log_data, f, indent=4)
 
-    print(f"✔ Processed video saved → {output_path}")
-    print(f"✔ Events detected: {len(events)}")
-    print(f"📊 Storage saved: {round(compression_percentage,2)}%")
-
-
-# ==============================
-# MAIN
-# ==============================
-
 def main():
 
     if not os.path.exists(INPUT_FOLDER):
@@ -243,7 +209,6 @@ def main():
     for file in files:
         path = os.path.join(INPUT_FOLDER, file)
         process_video(path)
-
 
 if __name__ == "__main__":
     main()
