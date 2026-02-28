@@ -180,17 +180,48 @@ def process_video(video_path):
     cap.release()
     out.release()
 
+    # ==========================
+    # VIDEO STATS
+    # ==========================
+
+    # total original video duration
+    original_duration = frame_count / fps
+
+    # total compressed duration (sum of motion events)
+    compressed_duration = 0
+    for e in events:
+        compressed_duration += e["duration_seconds"]
+
+    # compression percentage
+    if original_duration > 0:
+        compression_percentage = (
+            (original_duration - compressed_duration)
+            / original_duration
+        ) * 100
+    else:
+        compression_percentage = 0
+
     # SAVE LOG
     log_path = os.path.join(
         "processed",
         filename.replace(".mp4", "_log.json")
     )
 
+    #with open(log_path, "w") as f:
+    #    json.dump(events, f, indent=4)
+    log_data = {
+    "original_duration_sec": round(original_duration, 3),
+    "compressed_duration_sec": round(compressed_duration, 3),
+    "compression_percentage": round(compression_percentage, 2),
+    "events": events
+    }
+
     with open(log_path, "w") as f:
-        json.dump(events, f, indent=4)
+        json.dump(log_data, f, indent=4)
 
     print(f"✔ Processed video saved → {output_path}")
     print(f"✔ Events detected: {len(events)}")
+    print(f"📊 Storage saved: {round(compression_percentage,2)}%")
 
 
 # ==============================
