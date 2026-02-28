@@ -4,18 +4,14 @@ import os
 import json
 
 INPUT_FOLDER = "cctv"
-
 MIN_CONTOUR_AREA = 1000
 NO_MOTION_BUFFER_SECONDS = 1
 IGNORE_INITIAL_SECONDS = 2
 
-
 def process_video(video_path):
-
     print(f"\nProcessing: {video_path}")
 
     cap = cv2.VideoCapture(video_path)
-
     if not cap.isOpened():
         print("Error opening video.")
         return
@@ -61,15 +57,12 @@ def process_video(video_path):
         gray = cv2.GaussianBlur(gray, (21, 21), 0)
 
         fg_mask = backSub.apply(gray)
-
         _, mask = cv2.threshold(fg_mask, 200, 255, cv2.THRESH_BINARY)
-
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((3,3),np.uint8))
 
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
         motion = False
-
         for c in contours:
             if cv2.contourArea(c) > MIN_CONTOUR_AREA:
                 motion = True
@@ -108,6 +101,24 @@ def process_video(video_path):
     cap.release()
     out.release()
 
+    # -----------------------------
+    # MOVE PROCESSED FILE TO NEW FOLDER
+    # -----------------------------
+    processed_folder = "processed"
+    os.makedirs(processed_folder, exist_ok=True)
+
+    new_output_path = os.path.join(
+        processed_folder,
+        os.path.basename(output_path)
+    )
+
+    if os.path.exists(output_path):
+        os.replace(output_path, new_output_path)
+        print(f"Processed video moved to → {new_output_path}")
+    else:
+        print("Processed file not found. Move failed.")
+
+    # Save log
     log_path = video_path.replace(".mp4", "_log.json")
     with open(log_path, "w") as f:
         json.dump(events, f, indent=4)
@@ -118,7 +129,7 @@ def process_video(video_path):
     # -----------------------------
     # SAFE DELETE ORIGINAL VIDEO
     # -----------------------------
-    if os.path.exists(output_path) and os.path.exists(log_path):
+    if os.path.exists(new_output_path) and os.path.exists(log_path):
         try:
             os.remove(video_path)
             print("Original video deleted successfully.")
@@ -127,12 +138,10 @@ def process_video(video_path):
     else:
         print("Processed files missing. Original NOT deleted.")
 
-
 def main():
     for file in os.listdir(INPUT_FOLDER):
         if file.endswith(".mp4"):
             process_video(os.path.join(INPUT_FOLDER, file))
-
 
 if __name__ == "__main__":
     main()

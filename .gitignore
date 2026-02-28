@@ -1,2 +1,4 @@
 venv/
 cctv/
+processed/
+yolo8n.pt/
