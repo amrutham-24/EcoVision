@@ -1,6 +1,57 @@
-# EcoVision
-# Sustainable Smart Surveillance with Motion‑Based Video Optimization
-Our project is an AI‑powered smart surveillance system designed to improve the efficiency and sustainability of CCTV storage and monitoring. Traditional CCTV systems continuously record and store large amounts of static footage, resulting in excessive storage consumption, increased energy usage, and unnecessary hardware wear. Our system uses computer vision and machine learning techniques such as background subtraction and motion detection to identify meaningful events and automatically extract only the relevant video segments. By eliminating redundant static footage and preserving only motion‑based events with accurate timestamps, the system significantly reduces storage requirements and optimizes resource utilization. This contributes to sustainable smart living by lowering energy consumption, extending hardware lifespan, and enabling intelligent, automated surveillance for modern homes and infrastructure.
+# EcoVision: Sustainable Smart Surveillance with Motion‑Based Video Optimization
+
+# Problem Statemen
+Traditional CCTV systems record continuously, storing large amounts of static footage with no useful activity. This leads to:
+Excessive storage consumption
+Increased energy usage
+Faster hardware wear
+Difficulty in reviewing important events
+Most stored footage contains no meaningful motion.
+
+# Proposed solution
+Our system uses computer vision and AI‑based background subtraction (MOG2) to detect motion and automatically trim videos.
+Key functions:
+Detects motion using OpenCV MOG2 algorithm
+Extracts only motion‑containing video segments
+Removes unnecessary static footage
+Stores processed videos in a separate folder
+Generates logs with timestamps and storage saved
+Deletes original files safely after processing
+This significantly reduces storage usage while preserving important events.
+
+# Technology Stack
+Programming Language
+-Python
+Libraries
+-OpenCV (motion detection, video processing)
+-NumPy (array processing)
+-OS, JSON (file handling and logging)
+
+# Setup Instructions
+1. Install Python (3.8 or above)
+
+2. Install required libraries:
+pip install opencv-python numpy
+
+3. Create folder structure:
+project/
+│
+├── main.py
+├── cctv/        (input videos)
+├── processed/   (output videos)
+
+4. Run the program:
+python main.py
+
+5.Output will be saved in:
+processed folder → trimmed videos
+log file → motion timestamps and storage saved
+
+# Team Members
+Amrutha M
+Sanal Sivakumar
+Megha Suresh
+Agnivesh S
 
 
  
