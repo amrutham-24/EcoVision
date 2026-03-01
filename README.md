@@ -1,6 +1,6 @@
 # EcoVision: Sustainable Smart Surveillance with Motion‑Based Video Optimization
 
-# Problem Statemen
+# Problem Statement
 Traditional CCTV systems record continuously, storing large amounts of static footage with no useful activity. This leads to:
 Excessive storage consumption
 Increased energy usage
